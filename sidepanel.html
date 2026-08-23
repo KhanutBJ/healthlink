@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HosRegis Document Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 12l2 2 4-4" />
+            <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="header-title">HosRegis Document Assistant</h1>
+        </div>
+      </div>
+    </header>
+
+    <!-- Connection Status Bar -->
+    <div id="connection-bar" class="connection-bar status-waiting">
+      <div class="status-dot"></div>
+      <span id="connection-text">รอการเชื่อมต่อกับหน้า Admin...</span>
+    </div>
+
+    <!-- Main Content -->
+    <main id="main-content">
+      <!-- Empty State -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 80 80" fill="none">
+            <rect
+              x="10"
+              y="15"
+              width="40"
+              height="50"
+              rx="4"
+              stroke="currentColor"
+              stroke-width="2"
+              opacity="0.3"
+            />
+            <rect
+              x="30"
+              y="10"
+              width="40"
+              height="50"
+              rx="4"
+              stroke="currentColor"
+              stroke-width="2"
+              opacity="0.5"
+            />
+            <path
+              d="M40 30 l5 5 l10-10"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </div>
+        <h3>พร้อมตรวจสอบ</h3>
+        <p>เปิดหน้า Health Unit Check List เพื่อเริ่มตรวจสอบเอกสาร</p>
+        <div class="empty-steps">
+          <div class="step">
+            <span class="step-num">1</span><span>เปิดหน้า Checklist หรือคลิกไอคอนในตาราง</span>
+          </div>
+          <div class="step"><span class="step-num">2</span><span>AI ดึงข้อมูลจากฟอร์ม + เอกสาร</span></div>
+          <div class="step">
+            <span class="step-num">3</span><span>OCR อ่านเอกสาร เปรียบเทียบอัตโนมัติ</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Registration Info Card -->
+      <div id="reg-card" class="card hidden">
+        <div class="card-header">
+          <h3>ข้อมูลคำร้อง</h3>
+          <span id="reg-status-badge" class="badge badge-pending">กำลังตรวจ</span>
+        </div>
+        <div class="card-body">
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">รหัส (HCode)</span>
+              <span id="info-hcode" class="info-value mono">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">ชื่อหน่วยบริการ</span>
+              <span id="info-name" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">ประเภท</span>
+              <span id="info-type" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">ผู้มีอำนาจ</span>
+              <span id="info-authority" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Admin (HA)</span>
+              <span id="info-admin" class="info-value">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">อีเมล</span>
+              <span id="info-email" class="info-value">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rule-Based Checks -->
+      <div id="rules-card" class="card hidden">
+        <div class="card-header">
+          <h3>Rule-Based Checks</h3>
+          <span id="rules-count" class="badge badge-info">0/0</span>
+        </div>
+        <div id="rules-list" class="check-list"></div>
+      </div>
+
+      <!-- OCR Document Verification -->
+      <div id="ai-card" class="card hidden">
+        <div class="card-header">
+          <h3>OCR Document Verification</h3>
+          <div style="display: flex; gap: 4px">
+            <button
+              id="btn-check-all"
+              class="btn-primary btn-sm"
+              title="ติ๊กเลือกช่อง Checklist ทั้งหมดในหน้าเว็บ"
+            >
+              <span class="btn-icon-inner"></span> ติ๊กเลือกทั้งหมด
+            </button>
+            <button id="btn-run-ai" class="btn-secondary btn-sm">
+              <span class="btn-icon-inner"></span> สแกนเอกสาร
+            </button>
+          </div>
+        </div>
+        <div id="ai-status" class="ai-status hidden">
+          <div class="ai-progress">
+            <div id="ai-progress-bar" class="ai-progress-bar"></div>
+          </div>
+          <p id="ai-status-text" class="ai-status-text">กำลังวิเคราะห์...</p>
+        </div>
+        <div id="ai-results" class="check-list"></div>
+      </div>
+
+      <!-- Matching Map -->
+      <div id="map-card" class="card hidden">
+        <div class="card-header">
+          <h3>แผนผังการตรวจสอบ</h3>
+          <span id="map-badge" class="badge badge-info">0/0</span>
+        </div>
+        <div id="map-body" class="card-body"></div>
+      </div>
+
+      <!-- Document Comparison -->
+      <div id="comparison-card" class="card hidden">
+        <div class="card-header"><h3>เปรียบเทียบข้อมูล</h3></div>
+        <div id="comparison-body" class="comparison-body"></div>
+      </div>
+
+      <!-- AI Triage Summary -->
+      <div id="triage-card" class="card hidden">
+        <div class="card-header"><h3>AI Triage Summary</h3></div>
+        <div
+          id="triage-body"
+          class="comparison-body"
+          style="white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: var(--text)"
+        ></div>
+      </div>
+
+      <!-- Settings -->
+      <div id="settings-card" class="card">
+        <div class="card-header"><h3>ตั้งค่า AI Triage</h3></div>
+        <div class="card-body">
+          <div class="info-item">
+            <span class="info-label">Gemini API Key</span>
+            <input
+              id="gemini-api-key"
+              type="password"
+              autocomplete="off"
+              placeholder="วาง API key ที่นี่"
+              style="
+                width: 100%;
+                padding: 8px;
+                border-radius: 6px;
+                border: 1px solid #444;
+                background: #1a1a2e;
+                color: inherit;
+                font-family: inherit;
+              "
+            />
+          </div>
+          <div class="info-item" style="margin-top: 8px">
+            <span class="info-label">Model</span>
+            <input
+              id="gemini-model"
+              type="text"
+              autocomplete="off"
+              value="gemini-2.5-flash"
+              placeholder="gemini-2.5-flash"
+              style="
+                width: 100%;
+                padding: 8px;
+                border-radius: 6px;
+                border: 1px solid #444;
+                background: #1a1a2e;
+                color: inherit;
+                font-family: inherit;
+              "
+            />
+          </div>
+          <div class="info-item" style="margin-top: 12px">
+            <span class="info-label">วิธีดึงข้อมูลจากเอกสาร</span>
+            <select
+              id="extract-mode"
+              style="
+                width: 100%;
+                padding: 8px;
+                border-radius: 6px;
+                border: 1px solid #444;
+                background: #1a1a2e;
+                color: inherit;
+                font-family: inherit;
+                font-size: 14px;
+              "
+            >
+              <option value="parser">Parser อย่างเดียว (OCR ในเครื่อง ไม่ส่งข้อมูลออก)</option>
+              <option value="parser+ai">Parser + AI (ส่งไฟล์เอกสารไป Gemini)</option>
+            </select>
+            <span style="font-size: 13px; color: var(--text-muted); line-height: 1.6">
+              โหมด Parser + AI จะส่ง "ไฟล์เอกสารทั้งฉบับ" (รวมสำเนาบัตรประชาชน) ไปยัง Gemini
+              อ่านลายมือและสแกนคุณภาพต่ำได้ดีกว่ามาก และเร็วกว่า OCR ในเครื่อง ถ้า AI ล้มเหลวจะกลับไปใช้ OCR
+              ในเครื่องอัตโนมัติ
+            </span>
+          </div>
+          <label
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-top: 12px;
+              font-size: 14px;
+              cursor: pointer;
+            "
+          >
+            <input id="auto-scan-toggle" type="checkbox" checked />
+            สแกนเอกสารอัตโนมัติเมื่อเปิดหน้าคำร้อง
+          </label>
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px">
+            <button id="btn-save-settings" class="btn-primary btn-sm">บันทึกการตั้งค่า</button>
+            <span id="settings-status" style="font-size: 12px; color: var(--pass)"></span>
+          </div>
+          <p style="font-size: 11px; color: var(--text-muted); margin-top: 8px; line-height: 1.5">
+            เก็บไว้ใน chrome.storage ของเครื่องนี้เท่านั้น ไม่ถูกเขียนลงในซอร์สโค้ด
+          </p>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div id="summary-card" class="card hidden">
+        <div class="card-header"><h3>สรุปผล (Local)</h3></div>
+        <div id="summary-body" class="summary-body"></div>
+      </div>
+    </main>
+
+    <!-- Libraries (all local, no API key needed) -->
+    <script src="lib/tesseract/tesseract.min.js"></script>
+    <script src="lib/pdfjs/pdf.min.js"></script>
+
+    <!-- App Logic -->
+    <script src="lib/rules.js"></script>
+    <script src="lib/registry.js"></script>
+    <script src="lib/ocr-engine.js"></script>
+    <script src="lib/ai-extract.js"></script>
+    <script src="lib/agent.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
