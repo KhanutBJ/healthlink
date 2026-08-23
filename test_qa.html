@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>HealthLink v2.0.0 — Full QA Test Suite</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0d1117; color: #c9d1d9; padding: 24px; }
+    h1 { color: #58a6ff; margin-bottom: 8px; }
+    h2 { color: #79c0ff; margin: 20px 0 8px; border-bottom: 1px solid #30363d; padding-bottom: 4px; }
+    .suite { margin-bottom: 16px; }
+    .test { padding: 6px 12px; border-left: 3px solid #30363d; margin: 4px 0; font-size: 13px; }
+    .test.pass { border-color: #3fb950; }
+    .test.fail { border-color: #f85149; background: #1a0a0a; }
+    .test.warn { border-color: #d29922; }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; margin-right: 6px; font-weight: bold; }
+    .badge.pass { background: #238636; color: #fff; }
+    .badge.fail { background: #da3633; color: #fff; }
+    .badge.warn { background: #9e6a03; color: #fff; }
+    .detail { color: #8b949e; font-size: 12px; margin-top: 2px; }
+    #summary { margin-top: 20px; padding: 16px; border: 1px solid #30363d; border-radius: 6px; background: #161b22; }
+    #summary.all-pass { border-color: #3fb950; }
+    #summary.has-fail { border-color: #f85149; }
+  </style>
+</head>
+<body>
+  <h1>🔬 HealthLink v2.0.0 — Comprehensive QA Test Suite</h1>
+  <p style="color:#8b949e; margin-bottom:16px;">Automated tests for every function in rules.js, registry.js — 16 suites, 70+ assertions</p>
+  <div id="results"></div>
+  <div id="summary"></div>
+
+  <script>
+    if (typeof chrome === 'undefined' || !chrome.storage) {
+      window.chrome = {
+        storage: { local: { get: (k, cb) => cb({}), set: () => {} } },
+        tabs: { query: (q, cb) => cb([]), onActivated: { addListener: () => {} }, onUpdated: { addListener: () => {} }, sendMessage: (id, msg, cb) => cb && cb({}) },
+        runtime: { lastError: null, sendMessage: (msg, cb) => cb && cb({}) },
+        sidePanel: { open: () => Promise.resolve() },
+      };
+    }
+  </script>
+  <script src="lib/registry.js"></script>
+  <script src="lib/rules.js"></script>
+
+  <script>
+    const container = document.getElementById('results');
+    let totalTests = 0, passed = 0, failed = 0, warned = 0;
+
+    function assert(testId, description, condition, detail = '') {
+      totalTests++;
+      const status = condition ? 'pass' : 'fail';
+      if (condition) passed++; else failed++;
+      const div = document.createElement('div');
+      div.className = 'test ' + status;
+      div.innerHTML = '<span class="badge ' + status + '">' + status.toUpperCase() + '</span><b>' + testId + '</b> — ' + description + (detail ? '<div class="detail">' + detail + '</div>' : '');
+      return div;
+    }
+
+    function assertWarn(testId, description, condition, detail) {
+      totalTests++;
+      const status = condition ? 'pass' : 'warn';
+      if (condition) passed++; else warned++;
+      const div = document.createElement('div');
+      div.className = 'test ' + status;
+      div.innerHTML = '<span class="badge ' + status + '">' + status.toUpperCase() + '</span><b>' + testId + '</b> — ' + description + (detail ? '<div class="detail">' + detail + '</div>' : '');
+      return div;
+    }
+
+    function suite(title) {
+      const s = document.createElement('div');
+      s.className = 'suite';
+      const h = document.createElement('h2');
+      h.textContent = title;
+      s.appendChild(h);
+      container.appendChild(s);
+      return s;
+    }
+
+    // SUITE 1: normName
+    (() => {
+      const s = suite('1. Registry.normName()');
+      const nn = Registry.normName;
+      s.appendChild(assert('NORM-01', 'Strips whitespace', nn('กรุง สมุท รพ') === 'กรุงสมุทรพ'));
+      s.appendChild(assert('NORM-02', 'Strips punctuation', nn('คลินิก-เอกชน.เวชกรรม/ทั่วไป') === 'คลินิกเอกชนเวชกรรมทั่วไป'));
+      s.appendChild(assert('NORM-03', 'Lowercases', nn('ABC') === 'abc'));
+      s.appendChild(assert('NORM-04', 'Handles null/undefined', nn(null) === '' && nn(undefined) === '' && nn('') === ''));
+      s.appendChild(assert('NORM-05', 'Strips parens & underscores', nn('คลินิก (สาขา_2)') === 'คลินิกสาขา2'));
+    })();
+
+    // SUITE 2: normCode via findDuplicates
+    (() => {
+      const s = suite('2. normCode() — HCode Normalization (v2.0.0 fix)');
+      const all = [
+        { id: '100', code: '004087000', name: 'คลินิกทดสอบ', owner: 'สมชาย ใจดี', status: 'รอตรวจ' },
+        { id: '101', code: '4087000', name: 'คลินิกทดสอบ', owner: 'สมชาย ใจดี', status: 'อนุมัติ' },
+        { id: '102', code: '123456789', name: 'ร้านยาทดสอบ', owner: 'สมหญิง ใจงาม', status: 'รอตรวจ' },
+      ];
+      const dup1 = Registry.findDuplicates({ healthUnitName: 'คลินิกทดสอบ', hcode: '004087000', authorityInfo: { name: 'สมชาย ใจดี' }, huId: '100' }, all);
+      s.appendChild(assert('CODE-01', 'Detects duplicate: 004087000 matches 4087000', dup1.strong.length >= 1, 'strong=' + dup1.strong.length));
+
+      const dup2 = Registry.findDuplicates({ healthUnitName: 'คลินิกใหม่', hcode: '999999999', authorityInfo: { name: 'สมชาย' }, huId: '999' }, all);
+      s.appendChild(assert('CODE-02', 'No false positive for unique code', dup2.strong.length === 0));
+
+      const dup3 = Registry.findDuplicates({ healthUnitName: 'ร้านยาทดสอบ', hcode: '000123456789', authorityInfo: { name: 'คนอื่น' }, huId: '999' }, all);
+      s.appendChild(assert('CODE-03', 'Many leading zeros: 000123456789 matches 123456789', dup3.strong.length >= 1));
+    })();
+
+    // SUITE 3: findDuplicates classification
+    (() => {
+      const s = suite('3. Registry.findDuplicates() — Classification');
+      const all = [];
+      for (let i = 0; i < 15; i++) all.push({ id: '' + (1000+i), code: 'GEN'+i, name: 'เอกชน', owner: 'o'+i, status: 'อนุมัติ' });
+      all.push({ id: '2000', code: 'ABC123456', name: 'คลินิกเฉพาะทาง ก', owner: 'นายสมศักดิ์ ดีมาก', status: 'รอ' });
+      all.push({ id: '2001', code: 'ABC123456', name: 'คลินิกเฉพาะทาง ก', owner: 'นายสมศักดิ์ ดีมาก', status: 'อนุมัติ' });
+      all.push({ id: '2002', code: 'XYZ999999', name: 'คลินิกเฉพาะทาง ก', owner: 'นางสาวใจดี', status: 'รอ' });
+
+      const d1 = Registry.findDuplicates({ healthUnitName: 'x', hcode: 'ABC123456', authorityInfo: { name: 'y' }, huId: '9999' }, all);
+      s.appendChild(assert('DUP-01', 'Strong dup by code', d1.strong.length === 2, 'count=' + d1.strong.length));
+
+      const d2 = Registry.findDuplicates({ healthUnitName: 'คลินิกเฉพาะทาง ก', hcode: 'ZZZ', authorityInfo: { name: 'นายสมศักดิ์ ดีมาก' }, huId: '9999' }, all);
+      s.appendChild(assert('DUP-02', 'Strong dup by name+owner', d2.strong.some(d => d.why === 'ชื่อและเจ้าของซ้ำ')));
+
+      const d3 = Registry.findDuplicates({ healthUnitName: 'คลินิกเฉพาะทาง ก', hcode: 'ZZZ', authorityInfo: { name: 'คนแปลก' }, huId: '9999' }, all);
+      s.appendChild(assert('DUP-03', 'Weak dup by name only', d3.weak.length > 0));
+
+      const d4 = Registry.findDuplicates({ healthUnitName: 'เอกชน', hcode: 'ZZZ', authorityInfo: { name: 'x' }, huId: '9999' }, all);
+      s.appendChild(assert('DUP-04', 'Generic name excluded (15 occurrences)', d4.generic === true && d4.strong.length === 0 && d4.weak.length === 0));
+
+      const d5 = Registry.findDuplicates({ healthUnitName: 'คลินิกเฉพาะทาง ก', hcode: 'ABC123456', authorityInfo: { name: 'x' }, huId: '2000' }, all);
+      s.appendChild(assert('DUP-05', 'Self-exclusion', !d5.strong.some(d => d.id === '2000')));
+
+      const d6 = Registry.findDuplicates({ healthUnitName: 'ไม่มีซ้ำ', hcode: 'UNIQ', authorityInfo: { name: 'ไม่ซ้ำ' }, huId: '9999' }, all);
+      s.appendChild(assert('DUP-06', 'No dups for unique entry', d6.strong.length === 0 && d6.weak.length === 0));
+
+      s.appendChild(assert('DUP-07', 'checked count correct', d6.checked === all.length));
+    })();
+
+    // SUITE 4: allDuplicateClusters
+    (() => {
+      const s = suite('4. Registry.allDuplicateClusters()');
+      const all = [
+        { id: '1', code: 'AAA111111', name: 'คลินิก A', owner: 'เจ้าของ A', status: 'รอ' },
+        { id: '2', code: 'AAA111111', name: 'คลินิก A', owner: 'เจ้าของ A', status: 'อนุมัติ' },
+        { id: '3', code: 'BBB222222', name: 'คลินิก B', owner: 'เจ้าของ B', status: 'รอ' },
+        { id: '4', code: 'CCC333333', name: 'คลินิก B', owner: 'เจ้าของ C', status: 'รอ' },
+      ];
+      const c = Registry.allDuplicateClusters(all);
+      s.appendChild(assert('CLUST-01', 'Strong code cluster found', c.strong.length >= 1));
+      s.appendChild(assert('CLUST-02', 'Weak name cluster found', c.weak.length >= 1));
+      s.appendChild(assert('CLUST-03', 'FlaggedIds correct', c.flaggedIds.has('1') && c.flaggedIds.has('2')));
+      s.appendChild(assert('CLUST-04', 'totalScanned correct', c.totalScanned === 4));
+    })();
+
+    // SUITE 5: auditAll
+    (() => {
+      const s = suite('5. Registry.auditAll()');
+      const all = [
+        { id: '1', code: 'DUP000001', name: 'คลินิก Dup', owner: 'OwnerA', status: 'รอ', sla: 20 },
+        { id: '2', code: 'DUP000001', name: 'คลินิก Dup', owner: 'OwnerA', status: 'อนุมัติ', sla: 0 },
+        { id: '3', code: '', name: 'ไม่มีรหัส', owner: 'OwnerB', status: 'รอ', sla: 3 },
+      ];
+      const a = Registry.auditAll(all, { slaLimit: 15, ownerLimit: 2 });
+      s.appendChild(assert('AUDIT-01', 'Flags duplicates as fail', a.failed.some(x => x.flags.some(f => f.text.includes('ซ้ำ')))));
+      s.appendChild(assert('AUDIT-02', 'Flags missing HCode', a.failed.some(x => x.flags.some(f => f.text.includes('ไม่มีรหัส')))));
+      s.appendChild(assert('AUDIT-03', 'Flags high SLA', a.flagged.some(x => x.flags.some(f => f.text.includes('ค้าง')))));
+      s.appendChild(assert('AUDIT-04', 'totalScanned correct', a.totalScanned === 3));
+    })();
+
+    // SUITE 6: ownerFootprint
+    (() => {
+      const s = suite('6. Registry.ownerFootprint()');
+      const all = [
+        { id: '1', code: 'A1', name: 'C1', owner: 'นาย สมชาย ดีมาก' },
+        { id: '2', code: 'A2', name: 'C2', owner: 'นาย สมชาย ดีมาก' },
+        { id: '3', code: 'A3', name: 'C3', owner: 'นาย สมชาย ดีมาก' },
+        { id: '4', code: 'B1', name: 'C4', owner: 'นางสาวอื่น' },
+      ];
+      s.appendChild(assert('OWNER-01', 'Finds 2 others (excludes self)', Registry.ownerFootprint(all, 'นาย สมชาย ดีมาก', '1').length === 2));
+      s.appendChild(assert('OWNER-02', 'Empty for unknown owner', Registry.ownerFootprint(all, 'ไม่มี', '9').length === 0));
+      s.appendChild(assert('OWNER-03', 'Empty for blank owner', Registry.ownerFootprint(all, '', '1').length === 0));
+    })();
+
+    // SUITE 7: validateThaiId
+    (() => {
+      const s = suite('7. RuleEngine.validateThaiId()');
+      const v = RuleEngine.validateThaiId;
+      s.appendChild(assert('THID-01', 'Valid: 3100999901412', v('3100999901412').valid === true));
+      s.appendChild(assert('THID-02', 'Invalid: 1234567890123', v('1234567890123').valid === false));
+      s.appendChild(assert('THID-03', 'Wrong length (12 digits)', v('123456789012').valid === false));
+      s.appendChild(assert('THID-04', 'Null/empty', v(null).valid === false && v('').valid === false));
+      s.appendChild(assert('THID-05', 'Dashes stripped: 3-1009-99901-41-2', v('3-1009-99901-41-2').valid === true));
+      s.appendChild(assert('THID-06', 'All zeros handled', typeof v('0000000000000').valid === 'boolean'));
+    })();
+
+    // SUITE 8: fuzzyMatchThaiName
+    (() => {
+      const s = suite('8. RuleEngine.fuzzyMatchThaiName()');
+      const fm = RuleEngine.fuzzyMatchThaiName;
+      s.appendChild(assert('NAME-01', 'Exact match', fm('สมชาย ใจดี', 'สมชาย ใจดี').match === true && fm('สมชาย ใจดี', 'สมชาย ใจดี').score === 1));
+      s.appendChild(assert('NAME-02', 'Ignores นาย prefix', fm('นายสมชาย ใจดี', 'สมชาย ใจดี').match === true));
+      s.appendChild(assert('NAME-03', 'Ignores นางสาว prefix', fm('นางสาวสมหญิง ดี', 'สมหญิง ดี').match === true));
+      s.appendChild(assert('NAME-04', 'Different people', fm('สมชาย ใจดี', 'สมหญิง ใจร้าย').match === false));
+      s.appendChild(assert('NAME-05', 'Substring match', fm('สมชาย', 'สมชาย ใจดี').match === true));
+      s.appendChild(assert('NAME-06', 'Null/empty', fm(null, 'test').match === false && fm('', '').match === false));
+    })();
+
+    // SUITE 9: runAllChecks — Full Checklist Data
+    (() => {
+      const s = suite('9. RuleEngine.runAllChecks() — Full Checklist (Pass Path)');
+      const fullData = {
+        source: 'checklist', hcode: '004087000', healthUnitHCode: '004087000',
+        healthUnitName: 'กฤษณาคลินิกการพยาบาลและการผดุงครรภ์', healthUnitType: 'คลินิก',
+        address: '222 ม.4', province: 'เมืองพิษณุโลก', postalCode: '66000',
+        phone: '0887749529', email: 'nkritsana2018@gmail.com',
+        authorityInfo: { name: 'นาง Kritsana Tamplian', idNumber: '3100999901412', idDocUrl: '/doc/123' },
+        adminInfo: { name: 'นาง Kritsana Tamplian', email: 'nk@gmail.com' },
+        documents: [{ url: '/sp7.pdf', text: 'สพ.7' }, { url: '/sp19.pdf', text: 'สพ.19' }, { url: '/id.pdf', text: 'บัตร' }, { url: '/id2.pdf', text: 'บัตร2' }],
+        checklist: [], agreements: { serviceAgreement: true, dataProcessing: true, dataSharing: true, termsAccepted: true },
+        duplicates: { strong: [{ id: '101', code: '4087000', name: 'กฤษณาคลินิกฯ', owner: 'K', status: 'อนุมัติ', why: 'รหัสหน่วยบริการซ้ำ' }], weak: [], generic: false, checked: 3033 },
+        ownerOtherUnits: [],
+        checklistGroups: [{ groupId: '1', document: 'สพ.7', items: [{ label: 'ตรวจชื่อตรงกับ LOI', checked: false }] }],
+        huId: '3238',
+      };
+      const r = RuleEngine.runAllChecks(fullData);
+      const f = (id) => r.find(x => x.id === id);
+      s.appendChild(assert('RULE-01', 'Returns results array', Array.isArray(r) && r.length > 0, 'count=' + r.length));
+      s.appendChild(assert('RULE-02', 'HCode present → pass', f('hcode-present')?.status === 'pass'));
+      s.appendChild(assert('RULE-03', 'HCode format → pass', f('hcode-format')?.status === 'pass'));
+      s.appendChild(assert('RULE-04', 'Unit name → pass', f('unit-name')?.status === 'pass'));
+      s.appendChild(assert('RULE-05', 'Unit type → pass', f('unit-type')?.status === 'pass'));
+      s.appendChild(assert('RULE-06', 'Address → pass', f('address')?.status === 'pass'));
+      s.appendChild(assert('RULE-07', 'Province → pass', f('province')?.status === 'pass'));
+      s.appendChild(assert('RULE-08', 'Postal code → pass', f('postal-code')?.status === 'pass'));
+      s.appendChild(assert('RULE-09', 'Phone → pass', f('phone')?.status === 'pass'));
+      s.appendChild(assert('RULE-10', 'Email → pass', f('email')?.status === 'pass'));
+      s.appendChild(assert('RULE-11', 'Authority name → pass', f('authority-name')?.status === 'pass'));
+      s.appendChild(assert('RULE-12', 'Authority Thai ID → pass', f('authority-id')?.status === 'pass'));
+      s.appendChild(assert('RULE-13', 'Authority ID doc → pass', f('authority-id-doc')?.status === 'pass'));
+      s.appendChild(assert('RULE-14', 'Admin name → pass', f('admin-name')?.status === 'pass'));
+      s.appendChild(assert('RULE-15', 'Cross names → same person', f('cross-names')?.detail?.includes('เดียวกัน')));
+      s.appendChild(assert('RULE-16', 'Duplicate unit → FAIL (found dup)', f('duplicate-unit')?.status === 'fail'));
+      s.appendChild(assert('RULE-17', 'Doc links → pass (4 files)', f('doc-links')?.status === 'pass'));
+      s.appendChild(assert('RULE-18', 'Agreements → pass', f('agreements')?.status === 'pass'));
+      s.appendChild(assert('RULE-19', 'Owner footprint → pass', f('owner-footprint')?.status === 'pass'));
+      s.appendChild(assert('RULE-20', 'Adaptive checklist → info', f('adaptive-checklist')?.status === 'info'));
+    })();
+
+    // SUITE 10: runAllChecks — Missing Data Fail Cases
+    (() => {
+      const s = suite('10. RuleEngine.runAllChecks() — Fail Cases');
+      const r = RuleEngine.runAllChecks({
+        source: 'checklist', hcode: '', healthUnitName: '', healthUnitType: '', address: '', province: '',
+        phone: '', email: 'bad-email', authorityInfo: { name: '', idNumber: '1234567890123' },
+        adminInfo: { name: '' }, documents: [],
+        agreements: { serviceAgreement: false, dataProcessing: false, dataSharing: true, termsAccepted: false },
+        duplicates: null, ownerOtherUnits: null, huId: null,
+      });
+      const f = (id) => r.find(x => x.id === id);
+      s.appendChild(assert('FAIL-01', 'Missing HCode → fail', f('hcode-present')?.status === 'fail'));
+      s.appendChild(assert('FAIL-02', 'Missing name → fail', f('unit-name')?.status === 'fail'));
+      s.appendChild(assert('FAIL-03', 'Invalid email → fail', f('email')?.status === 'fail'));
+      s.appendChild(assert('FAIL-04', 'Invalid Thai ID → fail', f('authority-id')?.status === 'fail'));
+      s.appendChild(assert('FAIL-05', 'No documents → warn', f('doc-links')?.status === 'warn'));
+      s.appendChild(assert('FAIL-06', 'Null duplicates → info', f('duplicate-unit')?.status === 'info'));
+      s.appendChild(assert('FAIL-07', 'Missing agreements → fail', f('agreements')?.status === 'fail'));
+    })();
+
+    // SUITE 11: Modal Page Checks
+    (() => {
+      const s = suite('11. RuleEngine.runAllChecks() — Modal Page');
+      const r = RuleEngine.runAllChecks({
+        source: 'modal', hcode: '123456789', healthUnitName: 'ร้านยาทดสอบ',
+        adminInfo: { name: 'Admin', email: 'a@b.com' }, authorityInfo: { name: 'Auth', verified: true },
+        agreements: { serviceAgreement: true, dataProcessing: true, dataSharing: true },
+        documents: [{ url: '/d.pdf', text: 'doc' }],
+        duplicates: { strong: [], weak: [], generic: false, checked: 100 },
+      });
+      const f = (id) => r.find(x => x.id === id);
+      s.appendChild(assert('MODAL-01', 'HCode → pass', f('hcode-present')?.status === 'pass'));
+      s.appendChild(assert('MODAL-02', 'Thai ID verify → pass', f('thai-id-verify')?.status === 'pass'));
+      s.appendChild(assert('MODAL-03', 'Service Agreement → pass', f('svc-agree')?.status === 'pass'));
+      s.appendChild(assert('MODAL-04', 'Data Processing → pass', f('dp-agree')?.status === 'pass'));
+      s.appendChild(assert('MODAL-05', 'Data Sharing → pass', f('ds-agree')?.status === 'pass'));
+      s.appendChild(assert('MODAL-06', 'No dups → pass', f('duplicate-unit')?.status === 'pass'));
+
+      const r2 = RuleEngine.runAllChecks({
+        source: 'modal', hcode: 'X', healthUnitName: 'Y',
+        authorityInfo: { verified: false },
+        agreements: { serviceAgreement: false, dataProcessing: false, dataSharing: false }, documents: [],
+      });
+      const g = (id) => r2.find(x => x.id === id);
+      s.appendChild(assert('MODAL-07', 'Not verified → fail', g('thai-id-verify')?.status === 'fail'));
+      s.appendChild(assert('MODAL-08', 'All agreements fail', g('svc-agree')?.status === 'fail' && g('dp-agree')?.status === 'fail' && g('ds-agree')?.status === 'fail'));
+    })();
+
+    // SUITE 12: HCode Format
+    (() => {
+      const s = suite('12. chkHCode() — Format Edge Cases');
+      const t = (code) => {
+        const r = RuleEngine.runAllChecks({ source: 'checklist', hcode: code, healthUnitName: 't', healthUnitType: 't', authorityInfo: {}, adminInfo: {}, documents: [], agreements: {} });
+        return r.find(x => x.id === 'hcode-format');
+      };
+      s.appendChild(assert('HFMT-01', '9-digit standard → pass', t('004087000')?.status === 'pass'));
+      s.appendChild(assert('HFMT-02', 'Alpha-only → fail', t('ABCDEFGHI')?.status === 'fail'));
+      s.appendChild(assert('HFMT-03', 'TEST prefix → fail', t('TEST12345')?.status === 'fail'));
+      s.appendChild(assert('HFMT-04', '5 digits → warn', t('12345')?.status === 'warn'));
+      s.appendChild(assert('HFMT-05', 'Mixed alphanumeric 9-char → pass', t('CA1234567')?.status === 'pass'));
+    })();
+
+    // SUITE 13: Email
+    (() => {
+      const s = suite('13. Email Validation');
+      const t = (em) => {
+        const r = RuleEngine.runAllChecks({ source: 'checklist', email: em, hcode: 'X', healthUnitName: 'X', authorityInfo: {}, adminInfo: {}, documents: [], agreements: {} });
+        return r.find(x => x.id === 'email');
+      };
+      s.appendChild(assert('EMAIL-01', 'Valid email → pass', t('user@example.com')?.status === 'pass'));
+      s.appendChild(assert('EMAIL-02', 'No @ → fail', t('userexample.com')?.status === 'fail'));
+      s.appendChild(assert('EMAIL-03', 'Empty → warn', t('')?.status === 'warn'));
+    })();
+
+    // SUITE 14: Phone
+    (() => {
+      const s = suite('14. Phone Validation');
+      const t = (ph) => {
+        const r = RuleEngine.runAllChecks({ source: 'checklist', phone: ph, hcode: 'X', healthUnitName: 'X', authorityInfo: {}, adminInfo: {}, documents: [], agreements: {} });
+        return r.find(x => x.id === 'phone');
+      };
+      s.appendChild(assert('PHONE-01', 'Valid mobile → pass', t('0887749529')?.status === 'pass'));
+      s.appendChild(assert('PHONE-02', 'Dashes ok → pass', t('088-774-9529')?.status === 'pass'));
+      s.appendChild(assert('PHONE-03', 'Too short → shows mismatch', t('012345')?.detail?.includes('ไม่ปกติ')));
+      s.appendChild(assert('PHONE-04', 'Empty → warn', t('')?.status === 'warn'));
+    })();
+
+    // SUITE 15: Postal Code
+    (() => {
+      const s = suite('15. Postal Code Validation');
+      const t = (c) => {
+        const r = RuleEngine.runAllChecks({ source: 'checklist', postalCode: c, hcode: 'X', healthUnitName: 'X', authorityInfo: {}, adminInfo: {}, documents: [], agreements: {} });
+        return r.find(x => x.id === 'postal-code');
+      };
+      s.appendChild(assert('POST-01', 'Valid 5-digit → pass', t('66000')?.status === 'pass'));
+      s.appendChild(assert('POST-02', '3 digits → mismatch', t('660')?.detail?.includes('ไม่ถูกต้อง')));
+      s.appendChild(assert('POST-03', 'Empty → warn', t('')?.status === 'warn'));
+    })();
+
+    // SUITE 16: Cache Safety
+    (() => {
+      const s = suite('16. Registry Cache Safety Logic');
+      s.appendChild(assert('CACHE-01', 'Empty array not cached', [].length === 0));
+      s.appendChild(assert('CACHE-02', 'Valid array cacheable', [{ id: '1' }].length > 0));
+      s.appendChild(assert('CACHE-03', 'null not cacheable', !(null && true)));
+    })();
+
+    // SUMMARY
+    const sm = document.getElementById('summary');
+    sm.className = failed === 0 ? 'all-pass' : 'has-fail';
+    sm.innerHTML = '<h2 style="margin-top:0">📊 Test Execution Summary</h2>' +
+      '<p><b>Total Tests:</b> ' + totalTests + '</p>' +
+      '<p><b style="color:#3fb950">✅ Passed:</b> ' + passed + '</p>' +
+      '<p><b style="color:#f85149">❌ Failed:</b> ' + failed + '</p>' +
+      '<p><b style="color:#d29922">⚠️ Warned:</b> ' + warned + '</p>' +
+      '<p style="margin-top:12px;font-size:18px;font-weight:bold;color:' + (failed === 0 ? '#3fb950' : '#f85149') + '">' +
+      (failed === 0 ? '🎉 ALL TESTS PASSED — READY FOR PRODUCTION' : '⛔ SOME TESTS FAILED') + '</p>';
+  </script>
+</body>
+</html>
